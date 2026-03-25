@@ -949,18 +949,26 @@ footer p { font-size: 0.78rem; color: var(--mid); }
 
 /* ════════════════════════════════════════
    DESKTOP PREVIEW MODE  (JS-toggled class)
+   BUG FIX: overflow must NOT be hidden on html
+   — it blocks scrolling on the entire page.
+   Use overflow-x: hidden only on the body
+   to clip horizontal overflow while keeping
+   vertical scroll intact.
 ════════════════════════════════════════ */
-/* When user switches to "Mobile" preview on a desktop screen */
 html.preview-mobile {
   max-width: 390px !important;
   margin: 0 auto !important;
   border: 1px solid rgba(255,255,255,.12) !important;
   border-top: none !important;
   border-radius: 0 0 32px 32px !important;
-  overflow: hidden !important;
+  /* ✅ FIX: removed overflow: hidden — was blocking ALL scroll */
   box-shadow: 0 24px 80px rgba(0,0,0,.6) !important;
 }
-html.preview-mobile body { overflow-x: hidden; }
+html.preview-mobile body {
+  overflow-x: hidden;
+  /* ✅ FIX: ensure vertical scroll is always enabled */
+  overflow-y: auto !important;
+}
 
 /* Force mobile layout in preview mode — override desktop breakpoints */
 html.preview-mobile .nav-links    { display: none !important; }
@@ -1457,8 +1465,7 @@ const N8N = 'https://YOUR_N8N_DOMAIN/webhook/entroopi-lead';
 
 /* ════════════════════════════════
    DEVICE SWITCHER
-   Strategy: class on <html> triggers CSS overrides
-   Avoids JS layout recalculation — pure CSS-driven
+   FIX: Reset body overflow when switching modes
 ════════════════════════════════ */
 function setDevice(mode) {
   const btnM = document.getElementById('btn-mobile');
@@ -1469,12 +1476,19 @@ function setDevice(mode) {
     btnM.classList.add('active');
     btnD.classList.remove('active');
     html.classList.add('preview-mobile');
-    // Scroll back to top so layout shift is predictable
+    // ✅ FIX: explicitly ensure scroll is enabled after switching
+    document.body.style.overflow = '';
+    document.body.style.overflowX = 'hidden';
+    document.body.style.overflowY = '';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } else {
     btnD.classList.add('active');
     btnM.classList.remove('active');
     html.classList.remove('preview-mobile');
+    // ✅ FIX: reset all overflow overrides when going back to desktop
+    document.body.style.overflow = '';
+    document.body.style.overflowX = '';
+    document.body.style.overflowY = '';
   }
   // Persist choice
   try { sessionStorage.setItem('preview-mode', mode); } catch(e) {}
@@ -1504,7 +1518,11 @@ window.addEventListener('scroll', () => {
   }
   function closeDrawer() {
     toggle.classList.remove('open'); drawer.classList.remove('open');
+    // ✅ FIX: restore correct overflow state depending on current mode
+    const isMobilePreview = document.documentElement.classList.contains('preview-mobile');
     document.body.style.overflow = '';
+    document.body.style.overflowX = 'hidden';
+    document.body.style.overflowY = isMobilePreview ? '' : '';
     toggle.setAttribute('aria-expanded', 'false');
   }
   toggle.addEventListener('click', () => toggle.classList.contains('open') ? closeDrawer() : openDrawer());
@@ -1559,7 +1577,6 @@ window.addEventListener('scroll', () => {
     ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
     raf = requestAnimationFrame(draw);
   }
-  // Pause when hidden (battery/perf)
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) cancelAnimationFrame(raf);
     else draw();
